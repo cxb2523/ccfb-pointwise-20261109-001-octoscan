@@ -1,0 +1,7 @@
+# custom
+octoscan
+test/
+.vscode/
+octoscan-output/
+notes/
+.ignore
