@@ -1,0 +1,64 @@
+#
+# Sample workflow for the "dangerous-checkout" rule, used to demonstrate the fix for
+# https://github.com/synacktiv/octoscan (poisoned pipeline execution via
+# "pull_request_target" + a custom "actions/checkout" ref).
+#
+# Expected result after the fix: only the "build-fork-controlled-ref" job is flagged.
+# The other three jobs use refs that cannot be influenced by a fork pull request and
+# must not be reported (they would all have been false positives with the previous,
+# purely syntactic "is this ref a plain branch name" check).
+#
+name: poisoned-pipeline-sample
+
+on:
+  pull_request_target
+
+jobs:
+  # TRUE POSITIVE: the head sha is captured into an env var in one step, then used as
+  # the checkout ref in a later step. The value is attacker controlled whenever the pull
+  # request comes from a fork, so this must still be reported even though "ref:" itself
+  # never mentions "head" textually.
+  build-fork-controlled-ref:
+    runs-on: ubuntu-latest
+    steps:
+      - name: capture untrusted head sha
+        run: |
+          echo "TARGET_REF=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_ENV"
+
+      - name: checkout attacker-controlled ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_REF }}
+
+  # SAFE: hardcoded, protected branch. No expression at all, so it can't be influenced
+  # by the pull request.
+  build-protected-branch-literal:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: refs/heads/main
+
+  # SAFE: the base sha always refers to the target repository (set by the maintainers),
+  # never to the fork that opened the pull request.
+  build-base-sha:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout base commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+
+  # SAFE: the intermediate env var is traced back to the base sha, not the head sha.
+  build-indirect-base-ref:
+    runs-on: ubuntu-latest
+    steps:
+      - name: capture trusted base sha
+        run: |
+          echo "TARGET_REF=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_ENV"
+
+      - name: checkout base commit via env
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TARGET_REF }}

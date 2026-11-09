@@ -1,0 +1,39 @@
+$ go run octoscan.go scan ./core/rules/testdata/poisoned_pipeline_sample.yml
+# NOTE: "go run octoscan.go ..." only compiles the single listed file, so it misses
+# the sibling version.go (undefined: versionString) on this upstream snapshot too -
+# this is pre-existing and unrelated to the dangerous-checkout fix. The functional
+# equivalent that compiles the whole main package is "go run . scan <target>"
+# (or build the binary with "go build" per README.md and run ./octoscan).
+
+# command-line-arguments
+.\octoscan.go:32:62: undefined: versionString
+.\octoscan.go:50:37: undefined: versionString
+EXIT CODE: 1
+
+--------------------------------------------------------------------------------
+
+$ go run . scan ./core/rules/testdata/poisoned_pipeline_sample.yml
+
+2026/11/09 17:25:54 [INFO] Could not connect to Internet, skipping "repo-jacking" rule.
+./core/rules/testdata/poisoned_pipeline_sample.yml:26:79: Write to "$GITHUB_ENV" in a bash script. [dangerous-write]
+   |
+26 |           echo "TARGET_REF=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_ENV"
+   |                                                                               ^~~~~~~~
+./core/rules/testdata/poisoned_pipeline_sample.yml:31:16: Use of 'actions/checkout' with a custom ref that can be controlled by the pull request's head branch. [dangerous-checkout]
+   |
+31 |           ref: ${{ env.TARGET_REF }}
+   |                ^~~
+./core/rules/testdata/poisoned_pipeline_sample.yml:31:20: Expression injection, "env.**" is potentially untrusted. [expression-injection]
+   |
+31 |           ref: ${{ env.TARGET_REF }}
+   |                    ^~~~~~~~~~~~~~
+./core/rules/testdata/poisoned_pipeline_sample.yml:59:79: Write to "$GITHUB_ENV" in a bash script. [dangerous-write]
+   |
+59 |           echo "TARGET_REF=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_ENV"
+   |                                                                               ^~~~~~~~
+./core/rules/testdata/poisoned_pipeline_sample.yml:64:20: Expression injection, "env.**" is potentially untrusted. [expression-injection]
+   |
+64 |           ref: ${{ env.TARGET_REF }}
+   |                    ^~~~~~~~~~~~~~
+exit status 2
+EXIT CODE: 1

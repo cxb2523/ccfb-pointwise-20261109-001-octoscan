@@ -187,6 +187,16 @@ Triggers like `workflow_run` or `pull_request_target` run in a privileged contex
 
 ![excalidraw](img/excalidraw.png)
 
+#### judgment boundary for `actions/checkout`'s `ref:`
+
+- A `ref:` with no `${{ ... }}` expression (a plain branch name, a full `refs/heads/...` path, a hardcoded sha) is chosen by the workflow author and is never flagged, regardless of its shape.
+- `github.event.pull_request.base.*` and `github.base_ref` always describe the base (target) repository, controlled by the maintainers. They are never flagged, even on `pull_request_target`.
+- `github.event.pull_request.head.*` and `github.head_ref` describe the pull request's head (source) branch. When the PR comes from a fork (`head.repo.fork == true`), this is attacker controlled; since that boolean can't be evaluated statically, any use of `head.*` is always flagged.
+- `env.NAME` and `steps.<id>.outputs.<name>` are resolved by tracing, within the same job, how `NAME`/the output was last assigned: a job-level `env:`, or a `$GITHUB_ENV`/`$GITHUB_OUTPUT` write in an earlier step's `run:` script. The ref is flagged only if that assignment is itself derived from `head.*` (directly, or transitively through another tainted env var/output); it's not flagged if the assignment is provably safe (hardcoded value, or derived from `base.*`).
+- Any other dynamic expression that doesn't match the patterns above (an unrelated input, a secret, an untraced step output, ...) keeps the rule's original conservative behavior and is flagged, since it can't be proven safe.
+
+See `core/rules/rule_dangerous_checkout.go` and `core/rules/rule_dangerous_checkout_test.go` for the implementation and test cases, and `core/rules/testdata/poisoned_pipeline_sample.yml` for an example workflow mixing a truly fork-controllable indirect ref with refs that must not be reported.
+
 #### examples
 
 - [FreeRDP](https://github.com/FreeRDP/FreeRDP/pull/10209)

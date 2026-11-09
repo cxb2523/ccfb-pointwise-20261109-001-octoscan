@@ -58,6 +58,24 @@ func containsExpression(s string) bool {
 	return i >= 0 && i < strings.Index(s, "}}")
 }
 
+// expressionRegexp extracts the content of every "${{ ... }}" block in a string.
+// It's a simple, non-nested scan: good enough for the taint tracking performed by
+// RuleDangerousCheckout, which only needs to recognize property-access style
+// expressions (e.g. "github.event.pull_request.head.sha", "env.FOO").
+var expressionRegexp = regexp.MustCompile(`(?s)\$\{\{\s*(.*?)\s*\}\}`)
+
+// extractExpressions returns the inner content of every "${{ ... }}" block found in s.
+func extractExpressions(s string) []string {
+	matches := expressionRegexp.FindAllStringSubmatch(s, -1)
+	res := make([]string, 0, len(matches))
+
+	for _, m := range matches {
+		res = append(res, m[1])
+	}
+
+	return res
+}
+
 func skipAnalysis(n *actionlint.Workflow, triggers []string) bool {
 	if len(triggers) > 0 {
 		for _, event := range n.On {

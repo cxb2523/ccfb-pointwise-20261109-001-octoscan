@@ -31,6 +31,42 @@ var GitCheckoutBashRexexp = regexp.MustCompile(`(?m)git checkout.*(\$|` + regexp
 var GHCliCheckoutBashRexexp = regexp.MustCompile(`(?m)gh pr checkout.*(\$|` + regexp.QuoteMeta("`") + `)`)
 var GHCliDownloadArtifactsRexexp = regexp.MustCompile(`(?m)gh run download `)
 
+// The following regexps are used by RuleDangerousCheckout (core/rules/rule_dangerous_checkout.go)
+// to decide whether a "ref" used in "actions/checkout" (or an env/output value feeding
+// into it) can be controlled by a pull request opened from a fork. They are only used by
+// that rule and have no effect on the regexps above, which are shared with
+// rule_dangerous_write.go and rule_dangerous_action.go.
+
+// UntrustedPullRequestHeadRegexp matches expression fragments that read from the pull
+// request's head branch (the contributor/fork side). On privileged triggers such as
+// "pull_request_target" this data is attacker controlled.
+var UntrustedPullRequestHeadRegexp = regexp.MustCompile(`(?i)github\.(event\.pull_request\.head|head_ref)\b`)
+
+// TrustedPullRequestBaseRegexp matches expression fragments that read from the pull
+// request's base branch (the target repository). This is set by the repository owner
+// and is always safe, even on privileged triggers.
+var TrustedPullRequestBaseRegexp = regexp.MustCompile(`(?i)github\.(event\.pull_request\.base|base_ref)\b`)
+
+// EnvContextRegexp captures the variable name referenced through the "env" context,
+// e.g. "env.TARGET_REF" captures "TARGET_REF".
+var EnvContextRegexp = regexp.MustCompile(`\benv\.([A-Za-z_][A-Za-z0-9_]*)`)
+
+// StepOutputContextRegexp captures the step id and output name referenced through the
+// "steps" context, e.g. "steps.prep.outputs.ref" captures ("prep", "ref").
+var StepOutputContextRegexp = regexp.MustCompile(`\bsteps\.([A-Za-z0-9_-]+)\.outputs\.([A-Za-z0-9_-]+)`)
+
+// GitHubEnvAssignRegexp matches a shell line that appends a NAME=VALUE pair to
+// $GITHUB_ENV, capturing the variable name and the raw assigned value, e.g.
+// `echo "TARGET_REF=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_ENV"`.
+var GitHubEnvAssignRegexp = regexp.MustCompile(`(?m)echo\s+"?([A-Za-z_][A-Za-z0-9_]*)=([^"\n]*)"?\s*>>\s*"?\$\{?GITHUB_ENV`)
+
+// GitHubOutputAssignRegexp is the $GITHUB_OUTPUT equivalent of GitHubEnvAssignRegexp.
+var GitHubOutputAssignRegexp = regexp.MustCompile(`(?m)echo\s+"?([A-Za-z_][A-Za-z0-9_]*)=([^"\n]*)"?\s*>>\s*"?\$\{?GITHUB_OUTPUT`)
+
+// ShellVarRefRegexp captures a shell variable reference such as "$FOO" or "${FOO}" so an
+// indirect shell assignment like `TARGET=$HEAD_SHA` can be traced back to an env var.
+var ShellVarRefRegexp = regexp.MustCompile(`\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?`)
+
 // SyntaxCheckErrors crapy but I can't remove syntax-check errors, it's in the core of actionlint
 var SyntaxCheckErrors = []string{
 	"unexpected key \".+\" for ",
